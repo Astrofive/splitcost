@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Split the Bill</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<style>
+:root{--bg:#f1f5f9;--surface:#fff;--text:#0f172a;--muted:#64748b;--line:#e2e8f0;--primary:#4f46e5;--soft:#eef2ff;--soft-text:#4338ca;--err:#dc2626;--err-bg:#fef2f2;--input:#f8fafc;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0b1120;--surface:#1e293b;--text:#f1f5f9;--muted:#94a3b8;--line:#334155;--primary:#6366f1;--soft:#312e81;--soft-text:#c7d2fe;--err:#f87171;--err-bg:#450a0a;--input:#0f172a}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0b1120;--surface:#1e293b;--text:#f1f5f9;--muted:#94a3b8;--line:#334155;--primary:#6366f1;--soft:#312e81;--soft-text:#c7d2fe;--err:#f87171;--err-bg:#450a0a;--input:#0f172a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:1rem;padding:1rem}
+.card.bad{border-color:var(--err);background:var(--err-bg)}
+.muted{color:var(--muted)}
+.inp{width:100%;min-height:48px;padding:0 .85rem;border-radius:.75rem;border:1px solid var(--line);background:var(--input);color:var(--text);font-size:16px}
+.inp:focus{outline:2px solid var(--primary);outline-offset:0}
+.btn{min-height:44px;min-width:44px;padding:0 1rem;border-radius:.75rem;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--text);display:inline-flex;align-items:center;justify-content:center;gap:.35rem}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.35}
+.btn-p{background:var(--primary);border-color:var(--primary);color:#fff}
+.chip{min-height:34px;padding:0 .65rem;border-radius:999px;font-size:.8rem;font-weight:500;background:var(--soft);color:var(--soft-text);border:1px solid transparent;display:inline-flex;align-items:center;gap:.25rem}
+.chip.ghost{background:transparent;border:1px dashed var(--muted);color:var(--muted)}
+.mini{min-width:34px;min-height:34px;border-radius:999px;font-weight:700;font-size:1rem}
+.mini:disabled{opacity:.3}
+.chip.off{background:var(--input);color:var(--muted);border-color:var(--line)}
+.chip.on{background:var(--primary);color:#fff}
+.badge{min-height:28px;padding:0 .6rem;border-radius:999px;font-size:.8rem;background:var(--soft);color:var(--soft-text);display:inline-flex;align-items:center;gap:.3rem}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:.75rem 1rem calc(.75rem + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--line);z-index:20}
+</style>
+</head>
+<body>
+<main class="max-w-xl mx-auto px-4 pt-5 pb-32 space-y-5">
+  <header>
+    <h1 class="text-2xl font-extrabold tracking-tight">Split the Bill <span class="muted text-xs font-semibold align-middle">v0.2</span></h1>
+    <p class="muted text-sm">Add items, tag who shared them, and get everyone’s total.</p>
+  </header>
+
+  <section class="card space-y-3" aria-label="Add item">
+    <h2 class="font-bold">Add an item</h2>
+    <input id="desc" class="inp" placeholder="Description (e.g. Margherita pizza)" autocomplete="off">
+    <div class="flex gap-3 items-center">
+      <div class="flex items-center gap-1">
+        <button class="btn" data-a="qty-" aria-label="Decrease quantity">−</button>
+        <input id="qty" type="number" inputmode="numeric" min="1" value="1" class="inp text-center" style="width:64px;padding:0">
+        <button class="btn" data-a="qty+" aria-label="Increase quantity">+</button>
+      </div>
+      <div class="relative flex-1">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 muted">$</span>
+        <input id="cost" type="text" inputmode="decimal" placeholder="Total cost" class="inp" style="padding-left:1.6rem" autocomplete="off">
+      </div>
+    </div>
+    <p id="itemErr" class="text-sm hidden" style="color:var(--err)"></p>
+    <button class="btn btn-p w-full" data-a="addItem">+ Add item</button>
+  </section>
+
+  <section class="card space-y-3" aria-label="People">
+    <h2 class="font-bold">People</h2>
+    <div class="flex gap-2">
+      <input id="pname" class="inp" placeholder="Add a person" autocomplete="off">
+      <button class="btn btn-p" data-a="addPerson">Add</button>
+    </div>
+    <div id="pool" class="flex flex-wrap gap-2"></div>
+  </section>
+
+  <section id="items" class="space-y-2" aria-label="Items"></section>
+
+  <div id="banner" class="hidden card bad text-sm font-semibold" style="color:var(--err)" role="alert"></div>
+
+  <section id="results" class="hidden space-y-3 scroll-mt-4" aria-label="Results">
+    <h2 class="text-xl font-extrabold">Breakdown</h2>
+    <div class="card grid grid-cols-2 gap-3">
+      <label class="text-sm font-medium">Tax %
+        <input id="tax" type="text" inputmode="decimal" value="8.75" class="inp mt-1">
+      </label>
+      <label class="text-sm font-medium">Tip %
+        <input id="tip" type="text" inputmode="decimal" value="20" class="inp mt-1">
+      </label>
+    </div>
+    <div id="grand" class="card flex justify-between items-center"></div>
+    <div id="people" class="space-y-3"></div>
+  </section>
+</main>
+
+<div class="bar"><div class="max-w-xl mx-auto">
+  <button class="btn btn-p w-full text-base" style="min-height:52px" data-a="calc">Calculate Split</button>
+</div></div>
+
+<script>
+const S={people:[],items:[],taxPercent:8.75,tipPercent:20};
+const U={open:null,sel:new Set(),exp:new Set(),shown:false,bad:new Set()};
+const $=id=>document.getElementById(id);
+const r2=v=>Math.round(v*100)/100;
+const money=v=>'$'+(v<0?0:v).toFixed(2);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let uid=1;
+
+function addPerson(name){
+  name=(name||'').trim().replace(/\s+/g,' ');
+  if(!name)return null;
+  const ex=S.people.find(p=>p.toLowerCase()===name.toLowerCase());
+  if(ex)return ex;
+  S.people.push(name);return name;
+}
+function assign(it,p){if(p&&!it.assignedPeople.includes(p)){it.assignedPeople.push(p);if(it.units)it.units[p]=0}}
+function dropP(it,p){it.assignedPeople=it.assignedPeople.filter(x=>x!==p);if(it.units)delete it.units[p];if(it.assignedPeople.length<2)it.units=null}
+function editCard(it){return `<article class="card" id="item-${it.id}" style="border-left:4px solid var(--primary)">
+  <p class="text-xs font-bold muted mb-2">EDIT ITEM</p>
+  <input id="e-desc" class="inp mb-2" value="${esc(it.description)}" placeholder="Description" autocomplete="off">
+  <div class="flex gap-2 items-center">
+    <div class="flex items-center gap-1"><button class="btn" data-a="eq-" aria-label="Decrease quantity">−</button><input id="e-qty" type="number" inputmode="numeric" min="1" value="${it.quantity}" class="inp text-center" style="width:60px;padding:0"><button class="btn" data-a="eq+" aria-label="Increase quantity">+</button></div>
+    <div class="relative flex-1"><span class="absolute left-3 top-1/2 -translate-y-1/2 muted">$</span><input id="e-cost" type="text" inputmode="decimal" value="${it.totalCost.toFixed(2)}" class="inp" style="padding-left:1.6rem" autocomplete="off"></div>
+  </div>
+  <p id="e-err" class="text-sm hidden mt-2" style="color:var(--err)"></p>
+  <div class="flex gap-2 mt-3"><button class="btn flex-1" data-a="ecancel">Cancel</button><button class="btn btn-p flex-1" data-a="esave" data-id="${it.id}">Save</button></div></article>`}
+function saveEdit(id){
+  const it=S.items.find(i=>i.id===id);if(!it)return;
+  const d=$('e-desc').value.trim(),q=Math.max(1,parseInt($('e-qty').value)||1),c=r2(num($('e-cost').value));
+  if(!d||!c){const e=$('e-err');e.textContent=!d?'Please enter a description.':'Please enter a cost above $0.';e.classList.remove('hidden');return}
+  if(q!==it.quantity)it.units=null;
+  it.description=d;it.quantity=q;it.totalCost=c;U.edit=null;refresh();
+}
+function chips(it){
+  const a=it.assignedPeople,rest=S.people.filter(p=>!a.includes(p));
+  const on=a.map(p=>`<button class="chip on" data-a="togP" data-id="${it.id}" data-n="${esc(p)}" aria-pressed="true">${esc(p)} ×</button>`);
+  const off=rest.map(p=>`<button class="chip off" data-a="togP" data-id="${it.id}" data-n="${esc(p)}" aria-pressed="false">+ ${esc(p)}</button>`);
+  const acts=[];
+  if(rest.length)acts.push(`<button class="chip ghost" data-a="even" data-id="${it.id}">⚡ All</button>`);
+  if(U.sel.size)acts.push(`<button class="chip ghost" data-a="selAssign" data-id="${it.id}">✓ Picked</button>`);
+  acts.push(`<button class="chip ghost" data-a="toggle" data-id="${it.id}" aria-expanded="${U.open===it.id}">+ New</button>`);
+  return on.concat(off,acts).join('');
+}
+function newRow(it,open){return open?`<div class="flex gap-2 mt-3"><input class="inp" data-pk="${it.id}" placeholder="New person" autocomplete="off"><button class="btn btn-p" data-a="quick" data-id="${it.id}">Add</button></div>`:''}
+function evenUnits(it){const n=it.assignedPeople.length,b=Math.floor(it.quantity/n),r=it.quantity%n,u={};it.assignedPeople.forEach((p,i)=>u[p]=b+(i<r?1:0));return u}
+function sumU(it){return it.assignedPeople.reduce((s,p)=>s+(it.units[p]||0),0)}
+function badUnits(it){return !!it.units&&it.assignedPeople.length>=2&&sumU(it)!==it.quantity}
+function adj(it,p,d){if(!it.units){it.units={};it.assignedPeople.forEach(x=>it.units[x]=0)}if(d>0&&sumU(it)>=it.quantity)return;it.units[p]=Math.max(0,(it.units[p]||0)+d)}
+function sharesUI(it){
+  if(it.quantity<2||it.assignedPeople.length<2)return '';
+  const c=!!it.units,tot=c?sumU(it):0,ok=!c||tot===it.quantity;
+  const pills=it.assignedPeople.map(p=>{const u=c?(it.units[p]||0):0;const d=`data-id="${it.id}" data-n="${esc(p)}"`;return `<div class="flex items-center rounded-full" style="border:1px solid var(--line);background:var(--input);padding-left:.6rem"><span class="text-xs">${esc(p)}</span><button class="mini" data-a="u-" ${d} aria-label="Fewer for ${esc(p)}" ${c&&u<=0?'disabled':''}>−</button><span class="text-xs font-bold text-center" style="min-width:2rem">${c?u+'x':'even'}</span><button class="mini" data-a="u+" ${d} aria-label="More for ${esc(p)}" ${c&&tot>=it.quantity?'disabled':''}>+</button></div>`}).join('');
+  const status=c?`<span style="${ok?'':'color:var(--err);font-weight:700'}">${tot}/${it.quantity} assigned</span> · <button class="underline" style="min-height:28px" data-a="ureset" data-id="${it.id}">even</button>`:'even split or tap +/− to set counts';
+  return `<div class="mt-1 pt-1.5 pr-1" style="border-top:1px dashed var(--line)"><p class="text-xs muted mb-1">${status}</p><div class="flex flex-wrap gap-1.5">${pills}</div></div>`;
+}
+
+function renderPool(){
+  $('pool').innerHTML=S.people.length?S.people.map(p=>
+    `<button class="chip ${U.sel.has(p)?'on':'off'}" data-a="selP" data-n="${esc(p)}" aria-pressed="${U.sel.has(p)}">${esc(p)}</button>`).join('')
+    :'<p class="muted text-sm">No one yet. Add names above.</p>';
+}
+function renderItems(){
+  $('items').innerHTML=S.items.length?S.items.map(it=>{
+    if(U.edit===it.id)return editCard(it);const open=U.open===it.id;
+    const st=U.bad.has(it.id)?'var(--err)':it.assignedPeople.length?'var(--primary)':'var(--line)';
+    return `<article class="card ${U.bad.has(it.id)?'bad':''}" id="item-${it.id}" style="padding:.4rem .4rem .5rem .75rem;border-left:4px solid ${st}">
+      <div class="flex items-center gap-2">
+        <span class="muted text-xs font-bold" style="min-width:1.5rem">${it.quantity}x</span>
+        <p class="font-semibold text-sm flex-1 min-w-0 break-words leading-tight">${esc(it.description)}</p>
+        <span class="font-bold text-sm">${money(it.totalCost)}</span>
+        <button class="muted" style="min-width:36px;min-height:36px;font-size:1.05rem" data-a="edit" data-id="${it.id}" aria-label="Edit item">✎</button><button class="muted" style="min-width:36px;min-height:36px;font-size:1.05rem" data-a="del" data-id="${it.id}" aria-label="Delete item">✕</button>
+      </div>
+      <div class="flex flex-wrap gap-1 mt-0.5 pr-1">${chips(it)}</div>
+      ${sharesUI(it)}${newRow(it,open)}</article>`;
+  }).join(''):'<p class="muted text-sm text-center py-4">Items you add will appear here.</p>';
+  if(U.open){const f=document.querySelector(`[data-pk="${U.open}"]`);if(f&&U.focusPk){f.focus();U.focusPk=false}}
+}
+
+function compute(){
+  const per={};S.people.forEach(p=>per[p]={lines:[],sub:0});
+  S.items.forEach(it=>{
+    const n=it.assignedPeople.length;if(!n)return;
+    const share=r2(it.totalCost/n);
+    it.assignedPeople.forEach(p=>{if(!per[p])return;const c=!!it.units&&n>=2;const u=c?(it.units[p]||0):it.quantity;if(c&&!u)return;const s=c?r2(it.totalCost*u/it.quantity):share;per[p].lines.push({d:it.description,l:c?u+'x':n<2?it.quantity+'x':it.quantity===1?'1/'+n:'even split, '+n+' people',s});per[p].sub=r2(per[p].sub+s)});
+  });
+  const out=[];let grand=0;
+  Object.keys(per).forEach(p=>{
+    const o=per[p];if(!o.lines.length)return;
+    const tax=r2(o.sub*S.taxPercent/100),tip=r2(o.sub*S.tipPercent/100);
+    const total=r2(o.sub+tax+tip);grand=r2(grand+total);
+    out.push({name:p,lines:o.lines,sub:o.sub,tax,tip,total});
+  });
+  return{out,grand};
+}
+function renderResults(){
+  const{out,grand}=compute();
+  $('grand').innerHTML=`<span class="muted font-medium">Grand total</span><span class="text-xl font-extrabold">${money(grand)}</span>`;
+  $('people').innerHTML=out.map(p=>{
+    const o=U.exp.has(p.name);
+    return `<div class="card !p-0 overflow-hidden">
+      <button class="w-full flex justify-between items-center px-4 text-left" style="min-height:64px" data-a="exp" data-n="${esc(p.name)}" aria-expanded="${o}">
+        <span class="font-semibold">${esc(p.name)}</span>
+        <span class="flex items-center gap-2"><span class="text-xl font-extrabold">${money(p.total)}</span><span class="muted" style="display:inline-block;transition:transform .2s;transform:rotate(${o?180:0}deg)">▾</span></span>
+      </button>
+      ${o?`<div class="px-4 pb-4 pt-3 space-y-1.5 text-sm" style="border-top:1px solid var(--line)">
+        ${p.lines.map(l=>`<div class="flex justify-between gap-3"><span class="break-words">${esc(l.d)} <span class="muted">(${esc(l.l)})</span></span><span>${money(l.s)}</span></div>`).join('')}
+        <div class="pt-2 mt-2 space-y-1.5" style="border-top:1px dashed var(--line)">
+          <div class="flex justify-between"><span class="muted">Subtotal</span><span>${money(p.sub)}</span></div>
+          <div class="flex justify-between"><span class="muted">Tax (${S.taxPercent}%)</span><span>${money(p.tax)}</span></div>
+          <div class="flex justify-between"><span class="muted">Tip (${S.tipPercent}%)</span><span>${money(p.tip)}</span></div>
+        </div></div>`:''}
+    </div>`}).join('');
+}
+function unassigned(){return S.items.filter(i=>!i.assignedPeople.length||badUnits(i))}
+function refresh(){
+  U.bad=new Set([...U.bad].filter(id=>unassigned().some(i=>i.id===id)));
+  if(!U.bad.size)$('banner').classList.add('hidden');
+  renderPool();renderItems();
+  if(U.shown){
+    if(!S.items.length||unassigned().length){U.shown=false;$('results').classList.add('hidden')}
+    else renderResults();
+  }
+}
+function showErr(msg){const e=$('itemErr');e.textContent=msg;e.classList.toggle('hidden',!msg)}
+const num=v=>{const n=parseFloat(String(v).replace(/[^0-9.]/g,''));return isFinite(n)&&n>0?n:0};
+
+function addItem(){
+  const description=$('desc').value.trim(),q=Math.max(1,parseInt($('qty').value)||1),cost=r2(num($('cost').value));
+  if(!description)return showErr('Please enter a description.');
+  if(!cost)return showErr('Please enter a cost above $0.');
+  showErr('');
+  S.items.push({id:uid++,description,quantity:q,totalCost:cost,assignedPeople:[],units:null});
+  $('desc').value='';$('cost').value='';$('qty').value=1;$('desc').focus();
+  refresh();
+}
+function calcClick(){
+  if(!S.items.length){$('banner').textContent='Add at least one item first.';$('banner').classList.remove('hidden');return}
+  const bad=unassigned();
+  if(bad.length){
+    U.bad=new Set(bad.map(i=>i.id));U.shown=false;$('results').classList.add('hidden');
+    $('banner').textContent=`Fix ${bad.length} highlighted item${bad.length>1?'s':''}: each needs at least one person, and custom quantities must add up to the item’s total.`;
+    $('banner').classList.remove('hidden');renderItems();
+    const el=$('item-'+bad[0].id);if(el)el.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+  U.bad.clear();$('banner').classList.add('hidden');U.shown=true;
+  $('results').classList.remove('hidden');renderItems();renderResults();
+  $('results').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-a]');if(!b)return;
+  const a=b.dataset.a,id=+b.dataset.id,n=b.dataset.n,it=S.items.find(i=>i.id===id);
+  switch(a){
+    case 'qty-':$('qty').value=Math.max(1,(parseInt($('qty').value)||1)-1);break;
+    case 'qty+':$('qty').value=(parseInt($('qty').value)||1)+1;break;
+    case 'addItem':addItem();break;
+    case 'addPerson':{const p=addPerson($('pname').value);$('pname').value='';if(p)refresh();break}
+    case 'selP':U.sel.has(n)?U.sel.delete(n):U.sel.add(n);refresh();break;
+    case 'toggle':U.open=U.open===id?null:id;U.focusPk=!!U.open;refresh();break;
+    case 'even':S.people.forEach(p=>assign(it,p));refresh();break;
+    case 'selAssign':U.sel.forEach(p=>assign(it,p));refresh();break;
+    case 'togP':it.assignedPeople.includes(n)?dropP(it,n):assign(it,n);refresh();break;
+    case 'unassign':dropP(it,n);refresh();break;
+    case 'u+':adj(it,n,1);refresh();break;
+    case 'u-':adj(it,n,-1);refresh();break;
+    case 'ureset':it.units=null;refresh();break;
+    case 'quick':quick(id);break;
+    case 'del':S.items=S.items.filter(i=>i.id!==id);if(U.open===id)U.open=null;refresh();break;
+    case 'calc':calcClick();break;
+    case 'edit':U.edit=id;refresh();{const f=$('e-desc');if(f){f.focus();f.select()}}break;
+    case 'ecancel':U.edit=null;refresh();break;
+    case 'esave':saveEdit(id);break;
+    case 'eq-':$('e-qty').value=Math.max(1,(parseInt($('e-qty').value)||1)-1);break;
+    case 'eq+':$('e-qty').value=(parseInt($('e-qty').value)||1)+1;break;
+    case 'exp':U.exp.has(n)?U.exp.delete(n):U.exp.add(n);renderResults();break;
+  }
+});
+function quick(id){
+  const f=document.querySelector(`[data-pk="${id}"]`),it=S.items.find(i=>i.id===id);
+  const p=addPerson(f.value);if(p){assign(it,p);U.focusPk=true;refresh()}
+}
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter')return;
+  if(e.target.id==='pname')addPerson($('pname').value)&&($('pname').value='',refresh());
+  else if(e.target.dataset&&e.target.dataset.pk)quick(+e.target.dataset.pk);
+  else if(e.target.id==='e-desc'||e.target.id==='e-cost'){if(U.edit)saveEdit(U.edit)}
+  else if(e.target.id==='desc'||e.target.id==='cost')addItem();
+});
+$('tax').addEventListener('input',e=>{S.taxPercent=num(e.target.value);renderResults()});
+$('tip').addEventListener('input',e=>{S.tipPercent=num(e.target.value);renderResults()});
+refresh();
+</script>
+</body>
+</html>
